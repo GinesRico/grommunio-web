@@ -270,7 +270,7 @@ function cleanSearchFolders() {
 		// A shared-only session can expose a delegated store without having
 		// the personal finder folder expected by this housekeeping task.
 		error_log(sprintf("Unable to clean search folders for %s: %s",
-			$GLOBALS["mapisession"]->getUsername(), $e->getMessage()));
+			$GLOBALS["mapisession"]->getUserName(), $e->getMessage()));
 		return;
 	}
 

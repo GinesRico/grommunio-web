@@ -654,13 +654,70 @@ class MAPISession {
 	 */
 	public function getDefaultMessageStore($reopen = false) {
 		// Return cached default store if we have one
-		if (!$reopen && isset($this->defaultstore, $this->stores[$this->defaultstore])) {
+		if (!$reopen && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
 			return $this->stores[$this->defaultstore];
 		}
 
 		$this->loadMessageStoresFromSession();
 
+		// A shared-only account has no personal default store. Use the first
+		// explicitly configured shared mailbox as the virtual default store so
+		// existing webmail modules can operate without mailbox credentials.
+		if (empty($this->defaultstore)) {
+			foreach ($this->getSharedOnlyStoreNames() as $username) {
+				try {
+					$entryid = mapi_msgstore_createentryid($this->session, $username);
+					$store = $this->openMessageStore($entryid, $username);
+					if ($store !== false) {
+						$props = mapi_getprops($store, [PR_ENTRYID]);
+						$this->defaultstore = $props[PR_ENTRYID] ?? $entryid;
+						return $store;
+					}
+				}
+				catch (Exception $e) {
+					error_log(sprintf("shared-only default store %s failed (actor:%s): %s",
+						$username, $this->session_info["username"] ?? '', $e->getMessage()));
+				}
+			}
+		}
+
+		if (empty($this->defaultstore)) {
+			return false;
+		}
+
 		return $this->openMessageStore($this->defaultstore, 'Default store');
+	}
+
+	/**
+	 * Return the shared mailboxes assigned to a mailboxless webmail account.
+	 *
+	 * The JSON mapping is intentionally server-side configuration. It prevents
+	 * a user from selecting an arbitrary mailbox and avoids storing shared
+	 * mailbox passwords in the webmail session.
+	 *
+	 * @return string[]
+	 */
+	private function getSharedOnlyStoreNames() {
+		$username = strtolower((string) ($this->session_info['username'] ?? ''));
+		$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
+		if ($username === '' || $raw === false || trim($raw) === '') {
+			return [];
+		}
+
+		$mapping = json_decode($raw, true);
+		if (!is_array($mapping)) {
+			error_log('GROMMUNIO_SHARED_ONLY_STORES must contain a JSON object');
+			return [];
+		}
+
+		foreach ($mapping as $account => $stores) {
+			if (strtolower((string) $account) !== $username || !is_array($stores)) {
+				continue;
+			}
+			return array_values(array_filter(array_map('strval', $stores), static fn($store) => $store !== ''));
+		}
+
+		return [];
 	}
 
 	/**
@@ -669,9 +726,7 @@ class MAPISession {
 	 * @return string the entryid of the default messagestore
 	 */
 	public function getDefaultMessageStoreEntryId() {
-		if (!isset($this->defaultstore)) {
-			$this->loadMessageStoresFromSession();
-		}
+		$this->getDefaultMessageStore();
 
 		return bin2hex($this->defaultstore);
 	}
@@ -768,7 +823,19 @@ class MAPISession {
 	 * The store is opened only once, subsequent calls will return the previous store object
 	 */
 	public function getOtherUserStore() {
-		$otherusers = $this->retrieveOtherUsersFromSettings();
+		$sharedOnlyStores = $this->getSharedOnlyStoreNames();
+		if (!empty($sharedOnlyStores)) {
+			// Shared-only accounts are restricted to the server-side allowlist.
+			$otherusers = [];
+			foreach ($sharedOnlyStores as $username) {
+				$otherusers[$username] = [
+					'all' => ['folder_type' => 'all', 'show_subfolders' => true],
+				];
+			}
+		}
+		else {
+			$otherusers = $this->retrieveOtherUsersFromSettings();
+		}
 		$otherUsersStores = [];
 
 		foreach ($otherusers as $username => $folder) {
@@ -779,7 +846,7 @@ class MAPISession {
 
 			if (is_array($folder) && !empty($folder)) {
 				try {
-					$user_entryid = mapi_msgstore_createentryid($this->getDefaultMessageStore(), $username);
+					$user_entryid = mapi_msgstore_createentryid($this->session, $username);
 
 					$sharedStore = $this->openMessageStore($user_entryid, $username);
 					if ($sharedStore === false || $sharedStore === ecLoginPerm ||

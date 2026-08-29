@@ -658,7 +658,15 @@ class MAPISession {
 			return $this->stores[$this->defaultstore];
 		}
 
-		$this->loadMessageStoresFromSession();
+		try {
+			$this->loadMessageStoresFromSession();
+		}
+		catch (Exception $e) {
+			// Mailboxless users may not have a usable message-store table.
+			// Continue so a configured shared-only virtual default can be opened.
+			error_log(sprintf("message-store table unavailable (actor:%s): %s",
+				$this->session_info["username"] ?? '', $e->getMessage()));
+		}
 
 		// A shared-only account has no personal default store. Use the first
 		// explicitly configured shared mailbox as the virtual default store so

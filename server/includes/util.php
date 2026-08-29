@@ -253,13 +253,26 @@ function cleanTemp($directory = TMP_PATH, $maxLifeTime = STATE_FILE_MAX_LIFETIME
 
 function cleanSearchFolders() {
 	$store = $GLOBALS["mapisession"]->getDefaultMessageStore();
-
-	$storeProps = mapi_getprops($store, [PR_STORE_SUPPORT_MASK, PR_FINDER_ENTRYID]);
-	if (($storeProps[PR_STORE_SUPPORT_MASK] & STORE_SEARCH_OK) !== STORE_SEARCH_OK) {
+	if ($store === false) {
+		// Shared-only users do not have a personal search-folder store.
 		return;
 	}
 
-	$finderfolder = mapi_msgstore_openentry($store, $storeProps[PR_FINDER_ENTRYID]);
+	try {
+		$storeProps = mapi_getprops($store, [PR_STORE_SUPPORT_MASK, PR_FINDER_ENTRYID]);
+		if (($storeProps[PR_STORE_SUPPORT_MASK] & STORE_SEARCH_OK) !== STORE_SEARCH_OK) {
+			return;
+		}
+
+		$finderfolder = mapi_msgstore_openentry($store, $storeProps[PR_FINDER_ENTRYID]);
+	}
+	catch (Throwable $e) {
+		// A shared-only session can expose a delegated store without having
+		// the personal finder folder expected by this housekeeping task.
+		error_log(sprintf("Unable to clean search folders for %s: %s",
+			$GLOBALS["mapisession"]->getUsername(), $e->getMessage()));
+		return;
+	}
 
 	// Match both legacy ("grommunio Web Search Folder") and new-style
 	// ("grommunio Web Search YYYYMMDD-xxxx") search folders using a

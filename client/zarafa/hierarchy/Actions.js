@@ -178,7 +178,9 @@ Zarafa.hierarchy.Actions = {
 		var titleCounterSetting = container.getSettingsModel().getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
 		if (titleCounterSetting === true) {
       var title = container.getServerConfig().getWebappTitle();
-      var unreadCounter = hierarchyStore.getDefaultFolder('inbox').get('content_unread');
+      // Shared-only accounts have no personal Inbox in the hierarchy.
+      var defaultInbox = hierarchyStore.getDefaultFolder('inbox');
+      var unreadCounter = defaultInbox ? defaultInbox.get('content_unread') : 0;
       if (unreadCounter > 0) {
         title = '(' + unreadCounter + ') ' + title;
       }

@@ -52,6 +52,12 @@ switch ($_GET['load']) {
 		$GLOBALS['PluginManager']->triggerHook("server.index.load.download_attachment.after");
 		break;
 
+	case "download_unread_pdf_attachments":
+		$GLOBALS['PluginManager']->triggerHook("server.index.load.download_unread_pdf_attachments.before");
+		include BASE_PATH . 'server/includes/download_unread_pdf_attachments.php';
+		$GLOBALS['PluginManager']->triggerHook("server.index.load.download_unread_pdf_attachments.after");
+		break;
+
 	case "download_message":
 		$GLOBALS['PluginManager']->triggerHook("server.index.load.download_message.before");
 		include BASE_PATH . 'server/includes/download_message.php';

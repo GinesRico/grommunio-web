@@ -54,6 +54,7 @@ Zarafa.mail.MailContext = Ext.extend(Zarafa.core.Context, {
 		// The "New email" button which is available in all contexts
 		this.registerInsertionPoint('main.maintoolbar.new.item', this.createNewMailButton, this);
 		this.registerInsertionPoint('context.mainpaneltoolbar.item', this.createFilterButton, this);
+		this.registerInsertionPoint('main.toolbar.actions', this.createDownloadUnreadPdfAttachmentsButton, this);
 
 		// The tab in the top tabbar
 		this.registerInsertionPoint('main.maintabbar.left', this.createMainTab, this);
@@ -407,6 +408,105 @@ Zarafa.mail.MailContext = Ext.extend(Zarafa.core.Context, {
 			},
 			scope: this
 		};
+	},
+
+	/**
+	 * Creates the main toolbar button for downloading PDF attachments from unread messages.
+	 *
+	 * @return {Object} configuration object to create download button.
+	 */
+	createDownloadUnreadPdfAttachmentsButton: function()
+	{
+		return {
+			xtype: 'button',
+			id: 'zarafa-maintoolbar-download-unread-pdf-attachments',
+			scale: 'large',
+			overflowText: _('Download unread PDFs'),
+			tooltip: _('Download PDF attachments from unread messages'),
+			iconCls: 'icon_download_zip',
+			hidden: container.getCurrentContext && container.getCurrentContext().getName() !== this.getName(),
+			disabled: true,
+			handler: this.onDownloadUnreadPdfAttachments,
+			scope: this,
+			listeners: {
+				afterrender: this.onRenderDownloadUnreadPdfAttachmentsButton,
+				scope: this
+			}
+		};
+	},
+
+	/**
+	 * Registers listeners for keeping the unread PDF download button in sync with the active folder.
+	 *
+	 * @param {Ext.Button} button The rendered toolbar button.
+	 * @private
+	 */
+	onRenderDownloadUnreadPdfAttachmentsButton: function(button)
+	{
+		button.mon(container, 'contextswitch', function(folder, oldContext, newContext) {
+			this.updateDownloadUnreadPdfAttachmentsButton(button, newContext);
+		}, this);
+		button.mon(this.getModel(), 'folderchange', function() {
+			this.updateDownloadUnreadPdfAttachmentsButton(button, container.getCurrentContext());
+		}, this);
+		this.updateDownloadUnreadPdfAttachmentsButton(button, container.getCurrentContext());
+	},
+
+	/**
+	 * Enables the unread PDF download button only when a single mail folder is selected.
+	 *
+	 * @param {Ext.Button} button The toolbar button.
+	 * @param {Zarafa.core.Context} context The active context.
+	 * @private
+	 */
+	updateDownloadUnreadPdfAttachmentsButton: function(button, context)
+	{
+		var folders = this.getModel().getFolders();
+		var folder = folders && folders.length === 1 ? folders[0] : undefined;
+		var isMailContext = !Ext.isDefined(context) || context === this || context.getName && context.getName() === this.getName();
+		var validFolder = folder && folder.isContainerClass && folder.isContainerClass('IPF.Note', true);
+
+		button.setVisible(isMailContext);
+		button.setDisabled(!isMailContext || !validFolder);
+	},
+
+	/**
+	 * Starts downloading a ZIP with PDF attachments from unread messages in the current folder.
+	 *
+	 * @private
+	 */
+	onDownloadUnreadPdfAttachments: function()
+	{
+		var folders = this.getModel().getFolders();
+		var folder = folders && folders.length === 1 ? folders[0] : undefined;
+
+		if (!folder) {
+			Ext.MessageBox.show({
+				title: _('Unable to download'),
+				msg: _('No mail folder selected.'),
+				cls: Ext.MessageBox.ERROR_CLS,
+				buttons: Ext.MessageBox.OK
+			});
+			return;
+		}
+
+		var url = container.getBaseURL();
+		url = Ext.urlAppend(url, 'load=download_unread_pdf_attachments');
+		url = Ext.urlAppend(url, 'store=' + encodeURIComponent(folder.get('store_entryid')));
+		url = Ext.urlAppend(url, 'entryid=' + encodeURIComponent(folder.get('entryid')));
+
+		if (Zarafa.common.Actions.downloadFrame) {
+			if (!Ext.getBody().contains(Zarafa.common.Actions.downloadFrame.getEl().dom)) {
+				Zarafa.common.Actions.downloadFrame = new Zarafa.common.attachment.ui.AttachmentDownloader();
+			}
+		} else {
+			Zarafa.common.Actions.downloadFrame = new Zarafa.common.attachment.ui.AttachmentDownloader();
+		}
+
+		Zarafa.common.Actions.downloadFrame.downloadItem(url);
+		Ext.defer(function() {
+			this.getModel().reload();
+		}, 2000, this);
 	},
 
 	/**

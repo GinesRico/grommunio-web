@@ -826,7 +826,8 @@ class ItemModule extends Module {
 				$delegateWastebasketStyle = $GLOBALS['settings']->get('zarafa/v1/contexts/mail/delegate_wastebasket_style', DELEGATE_WASTEBASKET_MAINUSER);
 				$targetStore = $store;
 				$targetProps = $msgprops;
-				if ($delegateWastebasketStyle === DELEGATE_WASTEBASKET_MAINUSER) {
+				if (!$GLOBALS["mapisession"]->isSharedOnlyUser() &&
+					$delegateWastebasketStyle === DELEGATE_WASTEBASKET_MAINUSER) {
 					$targetStore = $GLOBALS["mapisession"]->getDefaultMessageStore();
 					$targetProps = mapi_getprops($targetStore, [PR_IPM_WASTEBASKET_ENTRYID]);
 				}

@@ -3330,7 +3330,8 @@ class Operations {
 				// Delete to the main user's wastebasket; the source folder still
 				// lives in the delegate store, so only the destination may change
 				$wastebasketStore = $store;
-				if ($delegateWastebasketStyle === DELEGATE_WASTEBASKET_MAINUSER) {
+				if (!$GLOBALS["mapisession"]->isSharedOnlyUser() &&
+					$delegateWastebasketStyle === DELEGATE_WASTEBASKET_MAINUSER) {
 					$wastebasketStore = $GLOBALS["mapisession"]->getDefaultMessageStore();
 					$msgprops = mapi_getprops($wastebasketStore, [PR_IPM_WASTEBASKET_ENTRYID]);
 				}

@@ -271,7 +271,9 @@ Zarafa.common.searchfield.ui.SearchFolderCombo = Ext.extend(Ext.form.ComboBox, {
 
 		var store = this.getStore();
 		if (changeCurrentFolder) {
-			this.doChangeCurrentFolder(store, folder);
+			if (!this.doChangeCurrentFolder(store, folder)) {
+				return;
+			}
 		}
 
 		// Check if closed or deleted folder is available in hierarchy tree,
@@ -303,6 +305,10 @@ Zarafa.common.searchfield.ui.SearchFolderCombo = Ext.extend(Ext.form.ComboBox, {
 	doChangeCurrentFolder: function(store, folder)
 	{
 		var currentFolderRecord = store.getAt(store.find('flag', Zarafa.advancesearch.data.SearchComboBoxFieldsFlags.CURRENT_SELECTED_FOLDER));
+		if (!currentFolderRecord) {
+			// Shared-only users do not have a personal current-folder record.
+			return false;
+		}
 
 		currentFolderRecord.beginEdit();
 		currentFolderRecord.set("name", folder.getDisplayName());

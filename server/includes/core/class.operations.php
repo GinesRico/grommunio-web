@@ -2683,8 +2683,12 @@ class Operations {
 		$saveRepresentee = strcasecmp((string) $delegateSentItemsStyle, 'representee') == 0;
 		$sendingAsDelegate = false;
 
-		// Get the outbox and sent mail entryid, ignore the given $store, use the default store for submitting messages
-		$store = $GLOBALS["mapisession"]->getDefaultMessageStore();
+		// Normal users submit through their own outbox. A mailboxless operator
+		// has no personal outbox, so retain the delegated store selected by the
+		// client (info/admin) for the complete send operation.
+		if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
+			$store = $GLOBALS["mapisession"]->getDefaultMessageStore();
+		}
 		$storeprops = mapi_getprops($store, [PR_IPM_OUTBOX_ENTRYID, PR_IPM_SENTMAIL_ENTRYID, PR_ENTRYID]);
 		$origStoreprops = mapi_getprops($origStore, [PR_ENTRYID, PR_IPM_SENTMAIL_ENTRYID]);
 

@@ -653,8 +653,9 @@ class MAPISession {
 	 * @return mapistore User's default message store object
 	 */
 	public function getDefaultMessageStore($reopen = false) {
+		$sharedOnlyStores = $this->getSharedOnlyStoreNames();
 		// Return cached default store if we have one
-		if (!$reopen && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
+		if (!$reopen && empty($sharedOnlyStores) && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
 			return $this->stores[$this->defaultstore];
 		}
 
@@ -671,8 +672,8 @@ class MAPISession {
 		// A shared-only account has no personal default store. Use the first
 		// explicitly configured shared mailbox as the virtual default store so
 		// existing webmail modules can operate without mailbox credentials.
-		if (empty($this->defaultstore)) {
-			foreach ($this->getSharedOnlyStoreNames() as $username) {
+		if (!empty($sharedOnlyStores) || empty($this->defaultstore)) {
+			foreach ($sharedOnlyStores as $username) {
 				try {
 					$entryid = mapi_msgstore_createentryid($this->session, $username);
 					$store = $this->openMessageStore($entryid, $username);
@@ -694,6 +695,17 @@ class MAPISession {
 		}
 
 		return $this->openMessageStore($this->defaultstore, 'Default store');
+	}
+
+	/**
+	 * Whether the logged-in account is a mailboxless operator with configured
+	 * delegated stores. Shared-only sends must keep the selected delegated store
+	 * instead of being redirected to the synthetic personal store.
+	 *
+	 * @return bool
+	 */
+	public function isSharedOnlyUser() {
+		return !empty($this->getSharedOnlyStoreNames());
 	}
 
 	/**

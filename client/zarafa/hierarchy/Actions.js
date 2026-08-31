@@ -24,7 +24,7 @@ Zarafa.hierarchy.Actions = {
 		// delegated stores are exposed separately in the hierarchy.
 		if (folder && folder.isIPMSubTree && folder.isIPMSubTree() && mapistore &&
 			mapistore.isDefaultStore && mapistore.isDefaultStore() &&
-			!mapistore.get('default_folder_inbox') && !mapistore.get('default_folder_drafts') &&
+			!mapistore.getDefaultFolder('inbox') && !mapistore.getDefaultFolder('drafts') &&
 			container.getHierarchyStore().getDefaultStore() !== mapistore) {
 			return false;
 		}

@@ -51,6 +51,16 @@ Zarafa.mail.MailContextModel = Ext.extend(Zarafa.core.ContextModel, {
 	{
 		folder = folder || container.getHierarchyStore().getDefaultFolder('drafts');
 		if (!folder) {
+			var stores = container.getHierarchyStore().getStores();
+			for (var i = 0; i < stores.length; i++) {
+				var sharedDrafts = stores[i].getDefaultFolder && stores[i].getDefaultFolder('drafts');
+				if (sharedDrafts && stores[i].isSharedStore && stores[i].isSharedStore()) {
+					folder = sharedDrafts;
+					break;
+				}
+			}
+		}
+		if (!folder) {
 			return;
 		}
 

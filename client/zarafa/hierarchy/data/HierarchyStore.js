@@ -658,7 +658,35 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 		var index = this.findExact('mdb_provider', Zarafa.core.mapi.MDBProvider.ZARAFA_SERVICE_GUID);
 
 		if (index !== -1) {
-			return this.getAt(index);
+			var ownStore = this.getAt(index);
+
+			// Mailboxless operator accounts can still have a synthetic service
+			// store in the hierarchy. It is not usable as a personal mailbox:
+			// there are no default folders behind it. Use an opened delegated
+			// mailbox as the context default so compose and folder actions target
+			// a real store instead of the synthetic root.
+			if (ownStore && (ownStore.get('default_folder_drafts') || ownStore.get('default_folder_inbox'))) {
+				return ownStore;
+			}
+
+			for (var i = 0; i < this.getCount(); i++) {
+				var candidate = this.getAt(i);
+				if (candidate && candidate.isSharedStore && candidate.isSharedStore() &&
+					(candidate.get('default_folder_drafts') || candidate.get('default_folder_inbox'))) {
+					return candidate;
+				}
+			}
+
+			return ownStore;
+		}
+
+		// A mailboxless session may not expose a service-store row at all.
+		for (var j = 0; j < this.getCount(); j++) {
+			var sharedStore = this.getAt(j);
+			if (sharedStore && sharedStore.isSharedStore && sharedStore.isSharedStore() &&
+				(sharedStore.get('default_folder_drafts') || sharedStore.get('default_folder_inbox'))) {
+				return sharedStore;
+			}
 		}
 	},
 

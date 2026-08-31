@@ -50,6 +50,9 @@ Zarafa.mail.MailContextModel = Ext.extend(Zarafa.core.ContextModel, {
 	createRecord: function(folder)
 	{
 		folder = folder || container.getHierarchyStore().getDefaultFolder('drafts');
+		if (!folder) {
+			return;
+		}
 
 		var signatureId = this.getSignatureId();
 
@@ -61,6 +64,14 @@ Zarafa.mail.MailContextModel = Ext.extend(Zarafa.core.ContextModel, {
 			isHTML: container.getSettingsModel().get('zarafa/v1/contexts/mail/dialogs/mailcreate/use_html_editor')
 			// @todo should set From properties differently if replying for someone else's store
 		});
+
+		// A mailboxless operator composes directly in the delegated mailbox.
+		// Preserve that mailbox as the From identity so the server can enforce
+		// its normal SendAs permission checks.
+		var store = folder.getMAPIStore();
+		if (store && store.isSharedStore && store.isSharedStore()) {
+			record.setDelegatorInfo(store, true);
+		}
 
 		return record;
 	},

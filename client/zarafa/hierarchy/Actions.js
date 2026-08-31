@@ -18,6 +18,16 @@ Zarafa.hierarchy.Actions = {
 	openFolder: function(folders)
 	{
 		var folder = Ext.isArray(folders) ? folders[0] : folders;
+		var mapistore = folder && folder.getMAPIStore ? folder.getMAPIStore() : null;
+		// A mailboxless operator may receive a synthetic personal root from
+		// MAPI. It has no folders and cannot be opened or removed. The real
+		// delegated stores are exposed separately in the hierarchy.
+		if (folder && folder.isIPMSubTree && folder.isIPMSubTree() && mapistore &&
+			mapistore.isDefaultStore && mapistore.isDefaultStore() &&
+			!mapistore.get('default_folder_inbox') && !mapistore.get('default_folder_drafts') &&
+			container.getHierarchyStore().getDefaultStore() !== mapistore) {
+			return false;
+		}
 		// FIXME: We should determine which accessflag we exactly need
 		// and check for that flag.
 		if (folder.get('access') !== 0) {

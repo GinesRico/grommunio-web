@@ -136,6 +136,16 @@ Zarafa.common.searchfield.ui.SearchFolderCombo = Ext.extend(Ext.form.ComboBox, {
 	{
 		var index = 0;
 		var defaultFolder = this.model.getDefaultFolder();
+		if (!defaultFolder) {
+			// Shared-only users have no personal default folder. Keep the
+			// selector usable through the explicit folder picker instead.
+			this.store.loadData([{
+				'name': _('Other…'),
+				'value': 'other'
+			}]);
+			this.setValue('other');
+			return;
+		}
 		if (defaultFolder.getDefaultFolderKey() !== 'inbox' && defaultFolder.getDefaultFolderKey() !== 'publicfolders') {
 			index = 1;
     }

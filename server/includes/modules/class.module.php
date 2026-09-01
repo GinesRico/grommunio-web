@@ -353,7 +353,7 @@ class Module {
 					foreach ($action["store_entryid"] as $store_id) {
 						$storeEntryid = hex2bin((string) $store_id);
 						$openedStore = $GLOBALS["mapisession"]->openStoreForAction($storeEntryid);
-						if ($GLOBALS["mapisession"]->isSharedOnlyUser() && $openedStore === false) {
+						if ($GLOBALS["mapisession"]->isOperatorUser() && $openedStore === false) {
 							throw new MAPIException(_("The selected mailbox is not authorized."), MAPI_E_NO_ACCESS);
 						}
 						array_push($store, $openedStore);
@@ -362,7 +362,7 @@ class Module {
 				elseif (ctype_xdigit((string) $action["store_entryid"])) {
 					$entryid = hex2bin((string) $action["store_entryid"]);
 					$store = $GLOBALS["mapisession"]->openStoreForAction($entryid);
-					if ($GLOBALS["mapisession"]->isSharedOnlyUser() && $store === false) {
+					if ($GLOBALS["mapisession"]->isOperatorUser() && $store === false) {
 						throw new MAPIException(_("The selected mailbox is not authorized."), MAPI_E_NO_ACCESS);
 					}
 				}

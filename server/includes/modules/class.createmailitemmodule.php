@@ -99,7 +99,7 @@ class CreateMailItemModule extends ItemModule {
 	private function resolveStore($store, array $action) {
 		// Mailboxless sessions must always use the explicit store selected by the
 		// client. The server validates it against the operator allowlist.
-		if ($GLOBALS['mapisession']->isSharedOnlyUser() && !empty($action['store_entryid'])) {
+		if ($GLOBALS['mapisession']->isOperatorUser() && !empty($action['store_entryid'])) {
 			$selectedStore = $GLOBALS['mapisession']->openAuthorizedSharedStore(
 				$this->hexToBinOrFalse($action['store_entryid'])
 			);
@@ -346,15 +346,15 @@ class CreateMailItemModule extends ItemModule {
 					// Older drafts may carry the Exchange DN in email_address.
 					// For mailboxless users the SMTP address is the canonical key
 					// used by the server-side allowlist.
-					if ($GLOBALS['mapisession']->isSharedOnlyUser() &&
+					if ($GLOBALS['mapisession']->isOperatorUser() &&
 						!empty($action['props']['sent_representing_smtp_address']) &&
 						strpos((string) $action['props']['sent_representing_smtp_address'], '@') !== false) {
 						$senderAddress = $action['props']['sent_representing_smtp_address'];
 					}
-					$otherStore = $GLOBALS['mapisession']->isSharedOnlyUser()
+					$otherStore = $GLOBALS['mapisession']->isOperatorUser()
 						? $GLOBALS['mapisession']->openAuthorizedSharedStoreByName($senderAddress)
 						: $GLOBALS['mapisession']->addUserStore($senderAddress);
-					if ($GLOBALS['mapisession']->isSharedOnlyUser() && $otherStore === false) {
+					if ($GLOBALS['mapisession']->isOperatorUser() && $otherStore === false) {
 						throw new MAPIException(_('The selected sender is not authorized.'), MAPI_E_NO_ACCESS);
 					}
 				}

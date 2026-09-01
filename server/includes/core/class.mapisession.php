@@ -155,7 +155,7 @@ class MAPISession {
 	 * @return string|false
 	 */
 	private function getLoggedInUserEntryId() {
-		if (!$this->isSharedOnlyUser()) {
+		if (!$this->isSharedOnlyUser() || $this->hasPersonalStore()) {
 			$store = $this->getDefaultMessageStore();
 			if (!$store) {
 				return false;
@@ -620,6 +620,8 @@ class MAPISession {
 		return [
 			'username' => $this->getUserName(),
 			'shared_only' => $this->isSharedOnlyUser(),
+			'operator_mode' => $this->isOperatorUser(),
+			'hide_personal_store' => $this->hidePersonalStore(),
 			'shared_mailboxes' => $this->getSharedOnlyStoreNames(),
 			'fullname' => $this->getFullName(),
 			'entryid' => bin2hex($this->getUserEntryid()),
@@ -703,7 +705,7 @@ class MAPISession {
 	 */
 	public function getDefaultMessageStore($reopen = false) {
 		$sharedOnlyStores = $this->getSharedOnlyStoreNames();
-		if (!empty($sharedOnlyStores)) {
+		if (!empty($sharedOnlyStores) && !$this->hasPersonalStore()) {
 			// A mailboxless session has no personal default store. Open the
 			// first authorized shared store only as an internal compatibility
 			// store; never record it as the user's default store.
@@ -770,7 +772,21 @@ class MAPISession {
 	 * @return bool
 	 */
 	public function isSharedOnlyUser() {
-		return !empty($this->getSharedOnlyStoreNames());
+		return $this->isOperatorUser() && !$this->hasPersonalStore();
+	}
+
+	/**
+	 * Whether this account is configured as an operator for shared mailboxes.
+	 * This remains true when it has a hidden technical mailbox.
+	 */
+	public function isOperatorUser() {
+		return $this->getOperatorConfig() !== null;
+	}
+
+	public function hidePersonalStore() {
+		$config = $this->getOperatorConfig();
+
+		return is_array($config) && ($config['hide_personal'] ?? false) === true;
 	}
 
 	/**
@@ -792,7 +808,7 @@ class MAPISession {
 	 * @return mapistore|false
 	 */
 	public function openAuthorizedSharedStore($entryid) {
-		if (!$this->isSharedOnlyUser() || !is_string($entryid) || $entryid === '') {
+		if (!$this->isOperatorUser() || !is_string($entryid) || $entryid === '') {
 			return false;
 		}
 
@@ -828,7 +844,7 @@ class MAPISession {
 	 */
 	public function openAuthorizedSharedStoreByName($username) {
 		$username = strtolower(trim((string) $username));
-		if (!$this->isSharedOnlyUser() || !in_array($username, array_map('strtolower', $this->getAuthorizedSharedStoreNames()), true)) {
+		if (!$this->isOperatorUser() || !in_array($username, array_map('strtolower', $this->getAuthorizedSharedStoreNames()), true)) {
 			return false;
 		}
 
@@ -849,7 +865,7 @@ class MAPISession {
 	 * @return mapistore|false
 	 */
 	public function openStoreForAction($entryid) {
-		if (!$this->isSharedOnlyUser()) {
+		if (!$this->isOperatorUser()) {
 			return $this->openMessageStore($entryid);
 		}
 
@@ -884,38 +900,76 @@ class MAPISession {
 	 *
 	 * @return string[]
 	 */
-	private function getSharedOnlyStoreNames() {
+	private function getOperatorConfig() {
 		// On requests after the initial login the serialized session_info may not
 		// contain username yet; EncryptionStore is the authoritative login identity.
 		$username = strtolower(trim((string) $this->getUserName()));
-		$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
+		$raw = getenv('GROMMUNIO_OPERATOR_MAILBOXES');
 		if ($raw === false || trim($raw) === '') {
-			$raw = $_SERVER['GROMMUNIO_SHARED_ONLY_STORES'] ?? $_ENV['GROMMUNIO_SHARED_ONLY_STORES'] ?? false;
+			$raw = $_SERVER['GROMMUNIO_OPERATOR_MAILBOXES'] ?? $_ENV['GROMMUNIO_OPERATOR_MAILBOXES'] ?? false;
 		}
 		if ($raw === false || trim($raw) === '') {
-			$mappingFile = '/etc/grommunio/shared-only-stores.json';
+			$mappingFile = '/etc/grommunio/operator-mailboxes.json';
 			if (is_readable($mappingFile)) {
 				$raw = file_get_contents($mappingFile);
 			}
 		}
+		if ($raw === false || trim($raw) === '') {
+			$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
+			if ($raw === false || trim($raw) === '') {
+				$mappingFile = '/etc/grommunio/shared-only-stores.json';
+				if (is_readable($mappingFile)) {
+					$raw = file_get_contents($mappingFile);
+				}
+			}
+		}
 		if ($username === '' || $raw === false || trim($raw) === '') {
-			return [];
+			return null;
 		}
 
 		$mapping = json_decode(trim((string) $raw), true);
 		if (!is_array($mapping)) {
-			error_log('GROMMUNIO_SHARED_ONLY_STORES must contain a JSON object');
-			return [];
+			error_log('GROMMUNIO_OPERATOR_MAILBOXES must contain a JSON object');
+			return null;
 		}
 
 		foreach ($mapping as $account => $stores) {
-			if (strtolower((string) $account) !== $username || !is_array($stores)) {
+			if (strtolower((string) $account) !== $username) {
 				continue;
 			}
-			return array_values(array_filter(array_map('strval', $stores), static fn($store) => $store !== ''));
+			if (is_array($stores) && $this->isList($stores)) {
+				$stores = ['hide_personal' => true, 'shared_mailboxes' => $stores];
+			}
+			return is_array($stores) ? $stores : null;
 		}
 
-		return [];
+		return null;
+	}
+
+	private function getSharedOnlyStoreNames() {
+		$config = $this->getOperatorConfig();
+		$stores = is_array($config) ? ($config['shared_mailboxes'] ?? []) : [];
+
+		return is_array($stores) ? array_values(array_filter(array_map('strval', $stores), static fn($store) => $store !== '')) : [];
+	}
+
+	private function isList(array $values) {
+		return array_keys($values) === range(0, count($values) - 1);
+	}
+
+	private function hasPersonalStore() {
+		if (!empty($this->defaultstore)) {
+			return true;
+		}
+
+		try {
+			$this->loadMessageStoresFromSession();
+		}
+		catch (Throwable $e) {
+			return false;
+		}
+
+		return !empty($this->defaultstore);
 	}
 
 	/**
@@ -986,9 +1040,13 @@ class MAPISession {
 
 		// A mailboxless user's service store is a synthetic login anchor, not
 		// a visible mailbox. Keep only authorized shared stores and public store.
-		if ($this->isSharedOnlyUser()) {
+		if ($this->isOperatorUser() && $this->hidePersonalStore()) {
 			$visibleStores = [];
 			foreach ($this->stores as $entryid => $store) {
+				if (!empty($this->defaultstore) &&
+					$GLOBALS['entryid']->compareEntryIds(bin2hex((string) $entryid), bin2hex((string) $this->defaultstore))) {
+					continue;
+				}
 				try {
 					$props = mapi_getprops($store, [PR_MDB_PROVIDER]);
 					if (($props[PR_MDB_PROVIDER] ?? null) === ZARAFA_SERVICE_GUID) {

@@ -102,13 +102,13 @@ Zarafa.core.data.User = Ext.extend(Object, {
 	},
 
 	/**
-	 * Whether this login has no personal mailbox and may use only delegated
-	 * shared mailboxes.
+	 * Whether this login is an operator whose personal technical mailbox is
+	 * hidden and whose visible mail is provided by delegated shared mailboxes.
 	 * @return {Boolean}
 	 */
 	isSharedOnly: function()
 	{
-		return this.meta.shared_only === true;
+		return this.meta.operator_mode === true || this.meta.shared_only === true;
 	},
 
 	/**

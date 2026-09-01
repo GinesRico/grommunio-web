@@ -102,6 +102,25 @@ Zarafa.core.data.User = Ext.extend(Object, {
 	},
 
 	/**
+	 * Whether this login has no personal mailbox and may use only delegated
+	 * shared mailboxes.
+	 * @return {Boolean}
+	 */
+	isSharedOnly: function()
+	{
+		return this.meta.shared_only === true;
+	},
+
+	/**
+	 * Return the server-provided list of shared mailbox addresses.
+	 * @return {String[]}
+	 */
+	getSharedMailboxes: function()
+	{
+		return this.meta.shared_mailboxes || [];
+	},
+
+	/**
 	 * @deprecated 2.2.0 This function only exists for backward compatibility with
 	 * 		 that want to send the session id as a GET parameter with requests that
 	 * 		 they make to grommunio.php. Currently grommunio.php does not expect this

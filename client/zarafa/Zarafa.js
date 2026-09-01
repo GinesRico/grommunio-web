@@ -652,7 +652,19 @@ Ext.apply(Zarafa, {
 	 */
 	validateHierarchy: function(store)
 	{
-		if (!store.getDefaultStore()) {
+		var defaultStore = store.getDefaultStore();
+		if (!defaultStore) {
+			// Mailboxless operator sessions intentionally have no personal
+			// service store. Their real roots are delegated shared stores.
+			var hasSharedStore = false;
+			store.each(function(mapiStore) {
+				if (mapiStore.isSharedStore && mapiStore.isSharedStore()) {
+					hasSharedStore = true;
+				}
+			});
+			if (hasSharedStore) {
+				return;
+			}
 			container.getNotifier().notify('error.hierarchy.defaultfolder',
 				_('Missing store'),
 				_('The default store is missing from the hierarchy.') +
@@ -705,6 +717,13 @@ Ext.apply(Zarafa, {
 			type: 'junk',
 			name: pgettext('hierarchy.foldername', 'Junk Email')
 		}];
+		if (defaultStore.isSharedStore && defaultStore.isSharedStore()) {
+			// Calendar, contacts, tasks and notes are not part of the
+			// mailboxless mail-only contract.
+			defaultFolders = defaultFolders.filter(function(folder) {
+				return ['inbox', 'outbox', 'sent', 'wastebasket', 'drafts'].indexOf(folder.type) !== -1;
+			});
+		}
 
 		var missing = [];
 

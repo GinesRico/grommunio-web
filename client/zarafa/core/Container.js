@@ -433,7 +433,15 @@ Zarafa.core.Container = Ext.extend(Ext.util.Observable, {
 	 */
 	getContexts: function()
 	{
-		return this.contexts;
+		if (!this.userRecord || !this.userRecord.isSharedOnly || !this.userRecord.isSharedOnly()) {
+			return this.contexts;
+		}
+
+		// Mailboxless operators have no personal stores for calendar, contacts,
+		// tasks, notes or the other store-backed contexts.
+		return this.contexts.filter(function(context) {
+			return context.getName() === 'mail';
+		});
 	},
 
 	/**
@@ -550,6 +558,11 @@ Zarafa.core.Container = Ext.extend(Ext.util.Observable, {
 
 		for (var i = 0, len = plugins.length; i < len; i++) {
 			var plugin = plugins[i];
+			if (insertionPoint === 'main.maintabbar.left' &&
+				this.userRecord && this.userRecord.isSharedOnly && this.userRecord.isSharedOnly() &&
+				['calendar', 'contact', 'task', 'note', 'today'].indexOf(plugin.getName()) !== -1) {
+				continue;
+			}
 
 			var components = plugin.getComponents.apply(plugin, args);
 

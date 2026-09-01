@@ -97,6 +97,18 @@ class CreateMailItemModule extends ItemModule {
 	 * @return mixed
 	 */
 	private function resolveStore($store, array $action) {
+		// Mailboxless sessions must always use the explicit store selected by the
+		// client. The server validates it against the operator allowlist.
+		if ($GLOBALS['mapisession']->isSharedOnlyUser() && !empty($action['store_entryid'])) {
+			$selectedStore = $GLOBALS['mapisession']->openAuthorizedSharedStore(
+				$this->hexToBinOrFalse($action['store_entryid'])
+			);
+			if ($selectedStore === false) {
+				throw new MAPIException(_('The selected mailbox is not authorized.'), MAPI_E_NO_ACCESS);
+			}
+			return $selectedStore;
+		}
+
 		if ($store) {
 			return $store;
 		}
@@ -330,7 +342,12 @@ class CreateMailItemModule extends ItemModule {
 			$addrType = $action['props']['sent_representing_address_type'];
 			if (strcasecmp($addrType, 'EX') === 0 || strcasecmp($addrType, 'SMTP') === 0) {
 				try {
-					$otherStore = $GLOBALS['mapisession']->addUserStore($action['props']['sent_representing_email_address']);
+					$otherStore = $GLOBALS['mapisession']->isSharedOnlyUser()
+						? $GLOBALS['mapisession']->openAuthorizedSharedStoreByName($action['props']['sent_representing_email_address'])
+						: $GLOBALS['mapisession']->addUserStore($action['props']['sent_representing_email_address']);
+					if ($GLOBALS['mapisession']->isSharedOnlyUser() && $otherStore === false) {
+						throw new MAPIException(_('The selected sender is not authorized.'), MAPI_E_NO_ACCESS);
+					}
 				}
 				catch (MAPIException $e) {
 					$e->setTitle(_('Unknown error'));

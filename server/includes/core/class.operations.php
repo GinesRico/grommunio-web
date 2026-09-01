@@ -1872,46 +1872,7 @@ class Operations {
 	 * @return mapimessage Created MAPI message resource
 	 */
 	public function createMessage($store, $parententryid) {
-		try {
-			$folder = mapi_msgstore_openentry($store, $parententryid);
-		}
-		catch (Throwable $e) {
-			// A mailboxless user can keep a stale folder entryid after changing
-			// the shared From mailbox. Try the real Outbox of every shared store.
-			error_log(sprintf('createMessage: parent open failed (%s), shared-only=%s',
-				get_class($e), $GLOBALS["mapisession"]->isSharedOnlyUser() ? 'yes' : 'no'));
-			if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
-				throw $e;
-			}
-
-			$stores = [$store];
-			foreach ($GLOBALS["mapisession"]->getAllMessageStores() as $candidateStore) {
-				if (!in_array($candidateStore, $stores, true)) {
-					$stores[] = $candidateStore;
-				}
-			}
-
-			foreach ($stores as $candidateStore) {
-				try {
-					$storeProps = mapi_getprops($candidateStore, [PR_IPM_OUTBOX_ENTRYID]);
-					$outboxEntryid = $storeProps[PR_IPM_OUTBOX_ENTRYID] ?? false;
-					if (!$outboxEntryid) {
-						continue;
-					}
-					$folder = mapi_msgstore_openentry($candidateStore, $outboxEntryid);
-					$store = $candidateStore;
-					error_log('createMessage: recovered shared send using a valid Outbox');
-					break;
-				}
-				catch (Throwable $fallbackError) {
-					$folder = false;
-				}
-			}
-
-			if (!$folder) {
-				throw $e;
-			}
-		}
+		$folder = mapi_msgstore_openentry($store, $parententryid);
 
 		return mapi_folder_createmessage($folder);
 	}
@@ -2722,43 +2683,12 @@ class Operations {
 		$saveRepresentee = strcasecmp((string) $delegateSentItemsStyle, 'representee') == 0;
 		$sendingAsDelegate = false;
 
-		// Normal users submit through their own outbox. A mailboxless operator
-		// has no personal outbox, so retain the delegated store selected by the
-		// client (info/admin) for the complete send operation.
+		// Normal users submit through their own outbox. Mailboxless operators keep
+		// the explicitly selected delegated store for the complete send operation.
 		if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
 			$store = $GLOBALS["mapisession"]->getDefaultMessageStore();
 		}
 		$storeprops = mapi_getprops($store, [PR_IPM_OUTBOX_ENTRYID, PR_IPM_SENTMAIL_ENTRYID, PR_ENTRYID]);
-		// A mailboxless session can arrive here with the right folder entryid
-		// but a different shared-store handle after changing the From mailbox.
-		// Rebind the operation to a store whose outbox is actually usable.
-		if ($GLOBALS["mapisession"]->isSharedOnlyUser() && isset($storeprops[PR_IPM_OUTBOX_ENTRYID])) {
-			try {
-				mapi_msgstore_openentry($store, $storeprops[PR_IPM_OUTBOX_ENTRYID]);
-			}
-			catch (MAPIException $e) {
-				$matchedStore = false;
-				foreach ($GLOBALS["mapisession"]->getAllMessageStores() as $candidateStore) {
-					try {
-						$candidateProps = mapi_getprops($candidateStore, [PR_IPM_OUTBOX_ENTRYID, PR_IPM_SENTMAIL_ENTRYID, PR_ENTRYID]);
-						if (!isset($candidateProps[PR_IPM_OUTBOX_ENTRYID])) {
-							continue;
-						}
-						mapi_msgstore_openentry($candidateStore, $candidateProps[PR_IPM_OUTBOX_ENTRYID]);
-						$store = $candidateStore;
-						$storeprops = $candidateProps;
-						$matchedStore = true;
-						break;
-					}
-					catch (Throwable $ignored) {
-						continue;
-					}
-				}
-				if (!$matchedStore) {
-					throw $e;
-				}
-			}
-		}
 		$origStoreprops = mapi_getprops($origStore, [PR_ENTRYID, PR_IPM_SENTMAIL_ENTRYID]);
 
 		if (!isset($storeprops[PR_IPM_OUTBOX_ENTRYID])) {

@@ -67,6 +67,8 @@ Zarafa.mail.dialogs.MailCreatePanel = Ext.extend(Ext.form.FormPanel, {
 	{
 		var recipients = container.getSettingsModel().get('zarafa/v1/contexts/mail/sendas', true);
 		var items = [];
+		var sharedOnly = container.getUser().isSharedOnly && container.getUser().isSharedOnly();
+		var sharedMailboxes = sharedOnly && container.getUser().getSharedMailboxes ? container.getUser().getSharedMailboxes() : [];
 
 		if(Ext.isEmpty(recipients)) {
 			return;
@@ -83,6 +85,40 @@ Zarafa.mail.dialogs.MailCreatePanel = Ext.extend(Ext.form.FormPanel, {
 			};
 
 			items.push(item);
+		}, this);
+
+		// Mailboxless operators receive their allowed From identities from the
+		// server. Keep these canonical SMTP addresses; the backend resolves them
+		// to the real shared store and checks Send-As permissions.
+		Ext.each(sharedMailboxes, function(address) {
+			address = String(address || '').toLowerCase();
+			if (!address) {
+				return;
+			}
+
+			var alreadyPresent = items.some(function(item) {
+				return item.record && item.record.get('email_address') === address;
+			});
+			if (alreadyPresent) {
+				return;
+			}
+
+			var record = Zarafa.core.data.RecordFactory.createRecordObjectByCustomType(
+				Zarafa.core.data.RecordCustomObjectType.ZARAFA_RECIPIENT,
+				{
+					display_name: address,
+					email_address: address,
+					smtp_address: address,
+					address_type: 'SMTP',
+					search_key: 'SMTP:' + address
+				}
+			);
+			items.push({
+				text: record.formatRecipient(true),
+				handler: this.onSelectSendAsRecipient,
+				scope: this,
+				record: record
+			});
 		}, this);
 
 		return items;
@@ -587,6 +623,16 @@ Zarafa.mail.dialogs.MailCreatePanel = Ext.extend(Ext.form.FormPanel, {
 
 		if(recipientRecord) {
 			this.getTopToolbar().showFrom.disable();
+			if (container.getUser().isSharedOnly && container.getUser().isSharedOnly()) {
+				var stores = container.getHierarchyStore().getStores();
+				var selectedAddress = String(recipientRecord.get('email_address') || '').toLowerCase();
+				Ext.each(stores, function(sharedStore) {
+					if (sharedStore.isSharedStore && sharedStore.isSharedStore() &&
+						String(sharedStore.get('user_name') || '').toLowerCase() === selectedAddress) {
+						container.getHierarchyStore().setActiveStore(sharedStore);
+					}
+				});
+			}
 
 			record.set('sent_representing_name', recipientRecord.get('display_name'));
 			record.set('sent_representing_email_address', recipientRecord.get('email_address'));

@@ -49,7 +49,10 @@ Zarafa.mail.MailContextModel = Ext.extend(Zarafa.core.ContextModel, {
 	 */
 	createRecord: function(folder)
 	{
-		folder = folder || container.getHierarchyStore().getDefaultFolder('drafts');
+		var hierarchyStore = container.getHierarchyStore();
+		var activeStore = hierarchyStore.getActiveStore ? hierarchyStore.getActiveStore() : hierarchyStore.getDefaultStore();
+		folder = folder || (activeStore && activeStore.getDefaultFolder('drafts'));
+		folder = folder || hierarchyStore.getDefaultFolder('drafts');
 		if (!folder) {
 			var stores = container.getHierarchyStore().getStores();
 			for (var i = 0; i < stores.length; i++) {
@@ -955,6 +958,11 @@ Zarafa.mail.MailContextModel = Ext.extend(Zarafa.core.ContextModel, {
 	{
 		if(!Ext.isEmpty(folders)) {
 			var folder = folders[0];
+			var hierarchyStore = container.getHierarchyStore();
+			var selectedStore = hierarchyStore.getById(folder.get('store_entryid'));
+			if (selectedStore && hierarchyStore.setActiveStore) {
+				hierarchyStore.setActiveStore(selectedStore);
+			}
 			var folderKey = folder.getDefaultFolderKey();
 			var field = 'message_delivery_time';
 

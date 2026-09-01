@@ -351,11 +351,20 @@ class Module {
 				if (is_array($action["store_entryid"])) {
 					$store = [];
 					foreach ($action["store_entryid"] as $store_id) {
-						array_push($store, $GLOBALS["mapisession"]->openMessageStore(hex2bin((string) $store_id)));
+						$storeEntryid = hex2bin((string) $store_id);
+						$openedStore = $GLOBALS["mapisession"]->openStoreForAction($storeEntryid);
+						if ($GLOBALS["mapisession"]->isSharedOnlyUser() && $openedStore === false) {
+							throw new MAPIException(_("The selected mailbox is not authorized."), MAPI_E_NO_ACCESS);
+						}
+						array_push($store, $openedStore);
 					}
 				}
 				elseif (ctype_xdigit((string) $action["store_entryid"])) {
-					$store = $GLOBALS["mapisession"]->openMessageStore(hex2bin((string) $action["store_entryid"]));
+					$entryid = hex2bin((string) $action["store_entryid"]);
+					$store = $GLOBALS["mapisession"]->openStoreForAction($entryid);
+					if ($GLOBALS["mapisession"]->isSharedOnlyUser() && $store === false) {
+						throw new MAPIException(_("The selected mailbox is not authorized."), MAPI_E_NO_ACCESS);
+					}
 				}
 			}
 		}

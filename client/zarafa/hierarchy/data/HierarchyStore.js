@@ -651,6 +651,59 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 	},
 
 	/**
+	 * Return the mailboxless user's currently selected shared mailbox.
+	 * The value is scoped by the authenticated username and is only accepted
+	 * when the store is present in the server-provided hierarchy.
+	 * @return {Zarafa.hierarchy.data.MAPIStoreRecord|undefined}
+	 */
+	getActiveStore: function()
+	{
+		if (!container.getUser().isSharedOnly || !container.getUser().isSharedOnly()) {
+			return this.getDefaultStore();
+		}
+
+		var key = 'grommunio.active-mailbox.' + String(container.getUser().getUserName() || '').toLowerCase();
+		var storedId = null;
+		try {
+			storedId = window.localStorage.getItem(key);
+		} catch (e) {
+			storedId = null;
+		}
+
+		if (storedId) {
+			var storedStore = this.getById(storedId);
+			if (storedStore && storedStore.isSharedStore && storedStore.isSharedStore()) {
+				return storedStore;
+			}
+		}
+
+		for (var i = 0; i < this.getCount(); i++) {
+			var candidate = this.getAt(i);
+			if (candidate && candidate.isSharedStore && candidate.isSharedStore()) {
+				return candidate;
+			}
+		}
+	},
+
+	/**
+	 * Persist the selected shared mailbox for this authenticated user.
+	 * @param {Zarafa.hierarchy.data.MAPIStoreRecord} store
+	 */
+	setActiveStore: function(store)
+	{
+		if (!store || !store.isSharedStore || !store.isSharedStore()) {
+			return;
+		}
+
+		var key = 'grommunio.active-mailbox.' + String(container.getUser().getUserName() || '').toLowerCase();
+		try {
+			window.localStorage.setItem(key, store.get('store_entryid'));
+		} catch (e) {
+			// Private browsing or a disabled storage API should not block mail use.
+		}
+	},
+
+	/**
 	 * @return {Zarafa.hierarchy.data.MAPIStoreRecord} default store
 	 */
 	getDefaultStore: function()
@@ -658,6 +711,13 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 		var hasUsableComposeFolder = function(store) {
 			return store && (store.getDefaultFolder('drafts') || store.getDefaultFolder('inbox'));
 		};
+		if (container.getUser && container.getUser() && container.getUser().isSharedOnly && container.getUser().isSharedOnly()) {
+			var activeStore = this.getActiveStore();
+			if (activeStore && hasUsableComposeFolder(activeStore)) {
+				return activeStore;
+			}
+		}
+
 		var index = this.findExact('mdb_provider', Zarafa.core.mapi.MDBProvider.ZARAFA_SERVICE_GUID);
 
 		if (index !== -1) {

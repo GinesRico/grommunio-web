@@ -572,6 +572,8 @@ class MAPISession {
 	public function getUserInfo() {
 		return [
 			'username' => $this->getUserName(),
+			'shared_only' => $this->isSharedOnlyUser(),
+			'shared_mailboxes' => $this->getSharedOnlyStoreNames(),
 			'fullname' => $this->getFullName(),
 			'entryid' => bin2hex($this->getUserEntryid()),
 			'email_address' => $this->getEmailAddress(),
@@ -654,8 +656,28 @@ class MAPISession {
 	 */
 	public function getDefaultMessageStore($reopen = false) {
 		$sharedOnlyStores = $this->getSharedOnlyStoreNames();
+		if (!empty($sharedOnlyStores)) {
+			// A mailboxless session has no personal default store. Open the
+			// first authorized shared store only as an internal compatibility
+			// store; never record it as the user's default store.
+			foreach ($sharedOnlyStores as $username) {
+				try {
+					$entryid = mapi_msgstore_createentryid($this->session, $username);
+					$store = $this->openMessageStore($entryid, $username);
+					if ($store !== false) {
+						return $store;
+					}
+				}
+				catch (Exception $e) {
+					error_log(sprintf("shared-only store %s failed (actor:%s): %s",
+						$username, $this->session_info["username"] ?? '', $e->getMessage()));
+				}
+			}
+
+			return false;
+		}
 		// Return cached default store if we have one
-		if (!$reopen && empty($sharedOnlyStores) && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
+		if (!$reopen && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
 			return $this->stores[$this->defaultstore];
 		}
 
@@ -669,17 +691,13 @@ class MAPISession {
 				$this->session_info["username"] ?? '', $e->getMessage()));
 		}
 
-		// A shared-only account has no personal default store. Use the first
-		// explicitly configured shared mailbox as the virtual default store so
-		// existing webmail modules can operate without mailbox credentials.
-		if (!empty($sharedOnlyStores) || empty($this->defaultstore)) {
+		if (empty($this->defaultstore)) {
 			foreach ($sharedOnlyStores as $username) {
 				try {
 					$entryid = mapi_msgstore_createentryid($this->session, $username);
 					$store = $this->openMessageStore($entryid, $username);
 					if ($store !== false) {
 						$props = mapi_getprops($store, [PR_ENTRYID]);
-						$this->defaultstore = $props[PR_ENTRYID] ?? $entryid;
 						return $store;
 					}
 				}
@@ -709,6 +727,108 @@ class MAPISession {
 	}
 
 	/**
+	 * Return the server-authorized shared mailboxes for the logged-in operator.
+	 * This is the only source of truth for mailboxless sessions.
+	 *
+	 * @return string[]
+	 */
+	public function getAuthorizedSharedStoreNames() {
+		return $this->getSharedOnlyStoreNames();
+	}
+
+	/**
+	 * Open a shared mailbox only when it belongs to the server-side allowlist.
+	 * The client is allowed to send an entryid, but never to choose an arbitrary
+	 * mailbox by changing that value in the request.
+	 *
+	 * @param string $entryid Binary store entryid
+	 * @return mapistore|false
+	 */
+	public function openAuthorizedSharedStore($entryid) {
+		if (!$this->isSharedOnlyUser() || !is_string($entryid) || $entryid === '') {
+			return false;
+		}
+
+		foreach ($this->getAuthorizedSharedStoreNames() as $username) {
+			try {
+				$requestedEntryid = mapi_msgstore_createentryid($this->session, $username);
+				$store = $this->openMessageStore($requestedEntryid, $username);
+				if ($store === false) {
+					continue;
+				}
+
+				$props = mapi_getprops($store, [PR_ENTRYID]);
+				if ($GLOBALS['entryid']->compareEntryIds(
+					bin2hex((string) ($props[PR_ENTRYID] ?? '')),
+					bin2hex($entryid)
+				)) {
+					return $store;
+				}
+			}
+			catch (Throwable $e) {
+				continue;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Resolve an authorized shared mailbox by its canonical SMTP address.
+	 *
+	 * @param string $username
+	 * @return mapistore|false
+	 */
+	public function openAuthorizedSharedStoreByName($username) {
+		$username = strtolower(trim((string) $username));
+		if (!$this->isSharedOnlyUser() || !in_array($username, array_map('strtolower', $this->getAuthorizedSharedStoreNames()), true)) {
+			return false;
+		}
+
+		try {
+			$entryid = mapi_msgstore_createentryid($this->session, $username);
+			return $this->openMessageStore($entryid, $username);
+		}
+		catch (Throwable $e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Resolve a store supplied by a client action. Mailboxless users may use
+	 * only an authorized shared mailbox or the public store.
+	 *
+	 * @param string $entryid Binary store entryid
+	 * @return mapistore|false
+	 */
+	public function openStoreForAction($entryid) {
+		if (!$this->isSharedOnlyUser()) {
+			return $this->openMessageStore($entryid);
+		}
+
+		$store = $this->openAuthorizedSharedStore($entryid);
+		if ($store !== false) {
+			return $store;
+		}
+
+		try {
+			$publicStore = $this->getPublicMessageStore();
+			$props = mapi_getprops($publicStore, [PR_ENTRYID]);
+			if ($GLOBALS['entryid']->compareEntryIds(
+				bin2hex((string) ($props[PR_ENTRYID] ?? '')),
+				bin2hex($entryid)
+			)) {
+				return $publicStore;
+			}
+		}
+		catch (Throwable $e) {
+			// The public store is optional.
+		}
+
+		return false;
+	}
+
+	/**
 	 * Return the shared mailboxes assigned to a mailboxless webmail account.
 	 *
 	 * The JSON mapping is intentionally server-side configuration. It prevents
@@ -718,7 +838,7 @@ class MAPISession {
 	 * @return string[]
 	 */
 	private function getSharedOnlyStoreNames() {
-		$username = strtolower((string) ($this->session_info['username'] ?? ''));
+		$username = strtolower(trim((string) ($this->session_info['username'] ?? '')));
 		$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
 		if ($raw === false || trim($raw) === '') {
 			$mappingFile = '/etc/grommunio/shared-only-stores.json';
@@ -730,7 +850,7 @@ class MAPISession {
 			return [];
 		}
 
-		$mapping = json_decode($raw, true);
+		$mapping = json_decode(trim((string) $raw), true);
 		if (!is_array($mapping)) {
 			error_log('GROMMUNIO_SHARED_ONLY_STORES must contain a JSON object');
 			return [];
@@ -752,6 +872,16 @@ class MAPISession {
 	 * @return string the entryid of the default messagestore
 	 */
 	public function getDefaultMessageStoreEntryId() {
+		if ($this->isSharedOnlyUser()) {
+			$store = $this->getDefaultMessageStore();
+			if (!$store) {
+				return '';
+			}
+			$props = mapi_getprops($store, [PR_ENTRYID]);
+
+			return bin2hex((string) ($props[PR_ENTRYID] ?? ''));
+		}
+
 		$this->getDefaultMessageStore();
 
 		return bin2hex($this->defaultstore);
@@ -802,7 +932,26 @@ class MAPISession {
 		// for other users.
 		$this->getOtherUserStore();
 
-		// Just return all the stores in our cache, even if we have some error in mapi
+		// A mailboxless user's service store is a synthetic login anchor, not
+		// a visible mailbox. Keep only authorized shared stores and public store.
+		if ($this->isSharedOnlyUser()) {
+			$visibleStores = [];
+			foreach ($this->stores as $entryid => $store) {
+				try {
+					$props = mapi_getprops($store, [PR_MDB_PROVIDER]);
+					if (($props[PR_MDB_PROVIDER] ?? null) === ZARAFA_SERVICE_GUID) {
+						continue;
+					}
+				}
+				catch (Exception $e) {
+					continue;
+				}
+				$visibleStores[$entryid] = $store;
+			}
+
+			return $visibleStores;
+		}
+
 		return $this->stores;
 	}
 

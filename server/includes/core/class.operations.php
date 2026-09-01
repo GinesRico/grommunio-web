@@ -1875,9 +1875,11 @@ class Operations {
 		try {
 			$folder = mapi_msgstore_openentry($store, $parententryid);
 		}
-		catch (MAPIException $e) {
+		catch (Throwable $e) {
 			// A mailboxless user can keep a stale folder entryid after changing
 			// the shared From mailbox. Try the real Outbox of every shared store.
+			error_log(sprintf('createMessage: parent open failed (%s), shared-only=%s',
+				get_class($e), $GLOBALS["mapisession"]->isSharedOnlyUser() ? 'yes' : 'no'));
 			if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
 				throw $e;
 			}

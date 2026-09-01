@@ -138,13 +138,57 @@ class MAPISession {
 	 */
 	public function getUser($userEntryid = false) {
 		if ($userEntryid === false) {
-			// get user entryid
-			$store_props = mapi_getprops($this->getDefaultMessageStore(), [PR_USER_ENTRYID]);
-			$userEntryid = $store_props[PR_USER_ENTRYID];
+			$userEntryid = $this->getLoggedInUserEntryId();
+		}
+		if (!$userEntryid) {
+			return false;
 		}
 
 		// open the user entry
 		return mapi_ab_openentry($this->getAddressbook(true), $userEntryid);
+	}
+
+	/**
+	 * Resolve the authenticated operator in the address book without using a
+	 * shared mailbox as a substitute identity.
+	 *
+	 * @return string|false
+	 */
+	private function getLoggedInUserEntryId() {
+		if (!$this->isSharedOnlyUser()) {
+			$store = $this->getDefaultMessageStore();
+			if (!$store) {
+				return false;
+			}
+			$props = mapi_getprops($store, [PR_USER_ENTRYID]);
+
+			return $props[PR_USER_ENTRYID] ?? false;
+		}
+
+		$username = $this->getUserName();
+		if ($username === '') {
+			return false;
+		}
+
+		$addressbook = $this->getAddressbook(true);
+		foreach ([PR_EMAIL_ADDRESS, PR_DISPLAY_NAME] as $property) {
+			try {
+				$rows = mapi_ab_resolvename(
+					$addressbook,
+					[[$property => $username]],
+					EMS_AB_ADDRESS_LOOKUP
+				);
+				if (isset($rows[0][PR_ENTRYID]) && $rows[0][PR_ENTRYID] !== '') {
+					return $rows[0][PR_ENTRYID];
+				}
+			}
+			catch (Throwable $e) {
+				// Try the next address-book key. The operator may be indexed by
+				// display name rather than by PR_EMAIL_ADDRESS.
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -168,8 +212,11 @@ class MAPISession {
 		$result = NOERROR;
 
 		try {
-			$store_props = mapi_getprops($this->getDefaultMessageStore(), [PR_USER_ENTRYID]);
-			$user = $this->getUser($store_props[PR_USER_ENTRYID]);
+			$userEntryid = $this->getLoggedInUserEntryId();
+			$user = $this->getUser($userEntryid);
+			if (!$user) {
+				throw new MAPIException('Authenticated user could not be resolved in the address book', MAPI_E_NOT_FOUND);
+			}
 
 			// receive userdata
 			$user_props = [PR_ASSISTANT, PR_ASSISTANT_TELEPHONE_NUMBER, PR_BUSINESS2_TELEPHONE_NUMBER, PR_BUSINESS_TELEPHONE_NUMBER,
@@ -183,7 +230,7 @@ class MAPISession {
 			$user_props = mapi_getprops($user, $user_props);
 
 			if (is_array($user_props) && isset($user_props[PR_DISPLAY_NAME], $user_props[PR_SMTP_ADDRESS])) {
-				$this->session_info["userentryid"] = $store_props[PR_USER_ENTRYID];
+				$this->session_info["userentryid"] = $userEntryid;
 				$this->session_info["fullname"] = $user_props[PR_DISPLAY_NAME];
 				$this->session_info["smtpaddress"] = $user_props[PR_SMTP_ADDRESS];
 				$this->session_info["emailaddress"] = $user_props[PR_EMAIL_ADDRESS];
@@ -838,8 +885,13 @@ class MAPISession {
 	 * @return string[]
 	 */
 	private function getSharedOnlyStoreNames() {
-		$username = strtolower(trim((string) ($this->session_info['username'] ?? '')));
+		// On requests after the initial login the serialized session_info may not
+		// contain username yet; EncryptionStore is the authoritative login identity.
+		$username = strtolower(trim((string) $this->getUserName()));
 		$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
+		if ($raw === false || trim($raw) === '') {
+			$raw = $_SERVER['GROMMUNIO_SHARED_ONLY_STORES'] ?? $_ENV['GROMMUNIO_SHARED_ONLY_STORES'] ?? false;
+		}
 		if ($raw === false || trim($raw) === '') {
 			$mappingFile = '/etc/grommunio/shared-only-stores.json';
 			if (is_readable($mappingFile)) {

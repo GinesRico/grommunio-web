@@ -108,7 +108,7 @@ Zarafa.core.data.User = Ext.extend(Object, {
 	 */
 	isSharedOnly: function()
 	{
-		return this.meta.operator_mode === true || this.meta.shared_only === true;
+		return this.meta.operator_mode === true || this.meta.hide_personal_store === true || this.meta.shared_only === true;
 	},
 
 	/**

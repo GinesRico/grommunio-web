@@ -264,6 +264,15 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 		if (this.isDestroyed) {
 			return;
 		}
+
+		// A technical mailbox is required by MAPI but must never be exposed as a
+		// visible root for an operator. Filter it here as well as on the server,
+		// including prefetched hierarchy responses and stale session data.
+		if (o && success === true && container.getUser && container.getUser().isSharedOnly && container.getUser().isSharedOnly()) {
+			o.records = (o.records || []).filter(function(record) {
+				return !record.isDefaultStore || !record.isDefaultStore();
+			});
+		}
 		if (o && success === true && options && options.actionType === 'opensharedfolder') {
 			var records = o.records;
 

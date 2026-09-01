@@ -77,7 +77,10 @@ class Operations {
 			// folders remain available through the normal hierarchy.
 			if ($GLOBALS["mapisession"]->isOperatorUser() &&
 				$GLOBALS["mapisession"]->hidePersonalStore() &&
-				$storeType === ZARAFA_SERVICE_GUID) {
+				($storeType === ZARAFA_SERVICE_GUID ||
+					($storeType !== ZARAFA_STORE_DELEGATE_GUID &&
+						$storeType !== ZARAFA_STORE_PUBLIC_GUID &&
+						strcasecmp((string) ($msgstore_props[PR_USER_NAME] ?? ''), (string) $GLOBALS["mapisession"]->getUserName()) === 0))) {
 				continue;
 			}
 

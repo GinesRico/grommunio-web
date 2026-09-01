@@ -270,7 +270,17 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 		// including prefetched hierarchy responses and stale session data.
 		if (o && success === true && container.getUser && container.getUser().isSharedOnly && container.getUser().isSharedOnly()) {
 			o.records = (o.records || []).filter(function(record) {
-				return !record.isDefaultStore || !record.isDefaultStore();
+				if (record.isDefaultStore && record.isDefaultStore()) {
+					return false;
+				}
+
+				// Some Gromox versions expose the technical mailbox with a provider
+				// value different from the service GUID. Its owner name is stable.
+				var owner = String(record.get('user_name') || '').toLowerCase();
+				var login = String(container.getUser().getUserName() || '').toLowerCase();
+				var isShared = record.isSharedStore && record.isSharedStore();
+				var isPublic = record.isPublicStore && record.isPublicStore();
+				return isShared || isPublic || owner !== login;
 			});
 		}
 		if (o && success === true && options && options.actionType === 'opensharedfolder') {

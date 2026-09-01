@@ -1877,21 +1877,36 @@ class Operations {
 		}
 		catch (MAPIException $e) {
 			// A mailboxless user can keep a stale folder entryid after changing
-			// the shared From mailbox. Re-read the selected store's real Outbox.
+			// the shared From mailbox. Try the real Outbox of every shared store.
 			if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
 				throw $e;
 			}
 
-			try {
-				$storeProps = mapi_getprops($store, [PR_IPM_OUTBOX_ENTRYID]);
-				$outboxEntryid = $storeProps[PR_IPM_OUTBOX_ENTRYID] ?? false;
-				if (!$outboxEntryid || $outboxEntryid === $parententryid) {
-					throw $e;
+			$stores = [$store];
+			foreach ($GLOBALS["mapisession"]->getAllMessageStores() as $candidateStore) {
+				if (!in_array($candidateStore, $stores, true)) {
+					$stores[] = $candidateStore;
 				}
-				$folder = mapi_msgstore_openentry($store, $outboxEntryid);
-				error_log('createMessage: replaced stale shared parent entryid with the selected store Outbox');
 			}
-			catch (Throwable $fallbackError) {
+
+			foreach ($stores as $candidateStore) {
+				try {
+					$storeProps = mapi_getprops($candidateStore, [PR_IPM_OUTBOX_ENTRYID]);
+					$outboxEntryid = $storeProps[PR_IPM_OUTBOX_ENTRYID] ?? false;
+					if (!$outboxEntryid) {
+						continue;
+					}
+					$folder = mapi_msgstore_openentry($candidateStore, $outboxEntryid);
+					$store = $candidateStore;
+					error_log('createMessage: recovered shared send using a valid Outbox');
+					break;
+				}
+				catch (Throwable $fallbackError) {
+					$folder = false;
+				}
+			}
+
+			if (!$folder) {
 				throw $e;
 			}
 		}

@@ -1872,7 +1872,29 @@ class Operations {
 	 * @return mapimessage Created MAPI message resource
 	 */
 	public function createMessage($store, $parententryid) {
-		$folder = mapi_msgstore_openentry($store, $parententryid);
+		try {
+			$folder = mapi_msgstore_openentry($store, $parententryid);
+		}
+		catch (MAPIException $e) {
+			// A mailboxless user can keep a stale folder entryid after changing
+			// the shared From mailbox. Re-read the selected store's real Outbox.
+			if (!$GLOBALS["mapisession"]->isSharedOnlyUser()) {
+				throw $e;
+			}
+
+			try {
+				$storeProps = mapi_getprops($store, [PR_IPM_OUTBOX_ENTRYID]);
+				$outboxEntryid = $storeProps[PR_IPM_OUTBOX_ENTRYID] ?? false;
+				if (!$outboxEntryid || $outboxEntryid === $parententryid) {
+					throw $e;
+				}
+				$folder = mapi_msgstore_openentry($store, $outboxEntryid);
+				error_log('createMessage: replaced stale shared parent entryid with the selected store Outbox');
+			}
+			catch (Throwable $fallbackError) {
+				throw $e;
+			}
+		}
 
 		return mapi_folder_createmessage($folder);
 	}

@@ -72,6 +72,15 @@ class Operations {
 			$inboxProps = [];
 			$storeType = $msgstore_props[PR_MDB_PROVIDER];
 
+			// Operator accounts keep a real technical mailbox for MAPI session state,
+			// but it must not become a visible mail root. Delegated stores and public
+			// folders remain available through the normal hierarchy.
+			if ($GLOBALS["mapisession"]->isOperatorUser() &&
+				$GLOBALS["mapisession"]->hidePersonalStore() &&
+				$storeType === ZARAFA_SERVICE_GUID) {
+				continue;
+			}
+
 			/*
 			 * storetype is public and if public folder is disabled
 			 * then continue in loop for next store.

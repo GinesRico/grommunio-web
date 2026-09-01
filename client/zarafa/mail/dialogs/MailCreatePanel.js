@@ -70,11 +70,7 @@ Zarafa.mail.dialogs.MailCreatePanel = Ext.extend(Ext.form.FormPanel, {
 		var sharedOnly = container.getUser().isSharedOnly && container.getUser().isSharedOnly();
 		var sharedMailboxes = sharedOnly && container.getUser().getSharedMailboxes ? container.getUser().getSharedMailboxes() : [];
 
-		if(Ext.isEmpty(recipients)) {
-			return;
-		}
-
-		Ext.each(recipients, function(recipient) {
+		Ext.each(recipients || [], function(recipient) {
 			var record = Zarafa.core.data.RecordFactory.createRecordObjectByCustomType(Zarafa.core.data.RecordCustomObjectType.ZARAFA_RECIPIENT, recipient);
 
 			var item = {

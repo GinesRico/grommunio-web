@@ -2690,6 +2690,36 @@ class Operations {
 			$store = $GLOBALS["mapisession"]->getDefaultMessageStore();
 		}
 		$storeprops = mapi_getprops($store, [PR_IPM_OUTBOX_ENTRYID, PR_IPM_SENTMAIL_ENTRYID, PR_ENTRYID]);
+		// A mailboxless session can arrive here with the right folder entryid
+		// but a different shared-store handle after changing the From mailbox.
+		// Rebind the operation to a store whose outbox is actually usable.
+		if ($GLOBALS["mapisession"]->isSharedOnlyUser() && isset($storeprops[PR_IPM_OUTBOX_ENTRYID])) {
+			try {
+				mapi_msgstore_openentry($store, $storeprops[PR_IPM_OUTBOX_ENTRYID]);
+			}
+			catch (MAPIException $e) {
+				$matchedStore = false;
+				foreach ($GLOBALS["mapisession"]->getAllMessageStores() as $candidateStore) {
+					try {
+						$candidateProps = mapi_getprops($candidateStore, [PR_IPM_OUTBOX_ENTRYID, PR_IPM_SENTMAIL_ENTRYID, PR_ENTRYID]);
+						if (!isset($candidateProps[PR_IPM_OUTBOX_ENTRYID])) {
+							continue;
+						}
+						mapi_msgstore_openentry($candidateStore, $candidateProps[PR_IPM_OUTBOX_ENTRYID]);
+						$store = $candidateStore;
+						$storeprops = $candidateProps;
+						$matchedStore = true;
+						break;
+					}
+					catch (Throwable $ignored) {
+						continue;
+					}
+				}
+				if (!$matchedStore) {
+					throw $e;
+				}
+			}
+		}
 		$origStoreprops = mapi_getprops($origStore, [PR_ENTRYID, PR_IPM_SENTMAIL_ENTRYID]);
 
 		if (!isset($storeprops[PR_IPM_OUTBOX_ENTRYID])) {

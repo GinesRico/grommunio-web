@@ -274,13 +274,11 @@ Zarafa.hierarchy.data.HierarchyStore = Ext.extend(Zarafa.core.data.IPFStore, {
 					return false;
 				}
 
-				// Some Gromox versions expose the technical mailbox with a provider
-				// value different from the service GUID. Its owner name is stable.
-				var owner = String(record.get('user_name') || '').toLowerCase();
-				var login = String(container.getUser().getUserName() || '').toLowerCase();
 				var isShared = record.isSharedStore && record.isSharedStore();
 				var isPublic = record.isPublicStore && record.isPublicStore();
-				return isShared || isPublic || owner !== login;
+				// The operator view contains only delegated and public stores. This
+				// also covers Gromox versions that omit or rewrite the owner name.
+				return isShared || isPublic;
 			});
 		}
 		if (o && success === true && options && options.actionType === 'opensharedfolder') {

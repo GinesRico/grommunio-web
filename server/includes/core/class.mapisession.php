@@ -720,6 +720,12 @@ class MAPISession {
 	private function getSharedOnlyStoreNames() {
 		$username = strtolower((string) ($this->session_info['username'] ?? ''));
 		$raw = getenv('GROMMUNIO_SHARED_ONLY_STORES');
+		if ($raw === false || trim($raw) === '') {
+			$mappingFile = '/etc/grommunio/shared-only-stores.json';
+			if (is_readable($mappingFile)) {
+				$raw = file_get_contents($mappingFile);
+			}
+		}
 		if ($username === '' || $raw === false || trim($raw) === '') {
 			return [];
 		}

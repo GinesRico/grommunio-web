@@ -342,9 +342,18 @@ class CreateMailItemModule extends ItemModule {
 			$addrType = $action['props']['sent_representing_address_type'];
 			if (strcasecmp($addrType, 'EX') === 0 || strcasecmp($addrType, 'SMTP') === 0) {
 				try {
+					$senderAddress = $action['props']['sent_representing_email_address'];
+					// Older drafts may carry the Exchange DN in email_address.
+					// For mailboxless users the SMTP address is the canonical key
+					// used by the server-side allowlist.
+					if ($GLOBALS['mapisession']->isSharedOnlyUser() &&
+						!empty($action['props']['sent_representing_smtp_address']) &&
+						strpos((string) $action['props']['sent_representing_smtp_address'], '@') !== false) {
+						$senderAddress = $action['props']['sent_representing_smtp_address'];
+					}
 					$otherStore = $GLOBALS['mapisession']->isSharedOnlyUser()
-						? $GLOBALS['mapisession']->openAuthorizedSharedStoreByName($action['props']['sent_representing_email_address'])
-						: $GLOBALS['mapisession']->addUserStore($action['props']['sent_representing_email_address']);
+						? $GLOBALS['mapisession']->openAuthorizedSharedStoreByName($senderAddress)
+						: $GLOBALS['mapisession']->addUserStore($senderAddress);
 					if ($GLOBALS['mapisession']->isSharedOnlyUser() && $otherStore === false) {
 						throw new MAPIException(_('The selected sender is not authorized.'), MAPI_E_NO_ACCESS);
 					}

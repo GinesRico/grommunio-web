@@ -242,7 +242,20 @@ Zarafa.core.Container = Ext.extend(Ext.util.Observable, {
 	 */
 	getCurrentContext: function()
 	{
-		return this.currentContext || this.getContextByName('default');
+		if (this.currentContext) {
+			return this.currentContext;
+		}
+
+		var defaultContext = this.getContextByName('default');
+		if (defaultContext) {
+			return defaultContext;
+		}
+
+		// Hidden mailbox operators expose only the mail context, so the normal
+		// default context is unavailable during the initial hierarchy load.
+		if (this.userRecord && this.userRecord.isSharedOnly && this.userRecord.isSharedOnly()) {
+			return this.getContextByName('mail');
+		}
 	},
 
 	/**

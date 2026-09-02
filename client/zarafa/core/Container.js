@@ -251,10 +251,16 @@ Zarafa.core.Container = Ext.extend(Ext.util.Observable, {
 			return defaultContext;
 		}
 
-		// Hidden mailbox operators expose only the mail context, so the normal
-		// default context is unavailable during the initial hierarchy load.
+		// getContextByName() intentionally applies the operator visibility filter.
+		// During initialisation that filter can hide the fallback itself, so search
+		// the registered contexts directly for the mail context.
 		if (this.userRecord && this.userRecord.isSharedOnly && this.userRecord.isSharedOnly()) {
-			return this.getContextByName('mail');
+			var contexts = this.contexts || [];
+			for (var index = 0, len = contexts.length; index < len; index++) {
+				if (contexts[index].getName() === 'mail') {
+					return contexts[index];
+				}
+			}
 		}
 	},
 

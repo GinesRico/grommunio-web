@@ -219,6 +219,18 @@ Zarafa.hierarchy.data.HierarchyTreeLoader = Ext.extend(Ext.tree.TreeLoader, {
 		for (var i = 0, len = data.length; i < len; i++) {
 			var item = data[i];
 			var folder = item.folder;
+
+			// Hidden operators use only delegated and public mailboxes. The tree
+			// receives folder rows directly, so filter the technical personal store
+			// here as a final guard independent of store metadata.
+			if (container.getUser && container.getUser().isSharedOnly && container.getUser().isSharedOnly()) {
+				var folderStore = folder.getMAPIStore && folder.getMAPIStore();
+				if (!folderStore || ((!folderStore.isSharedStore || !folderStore.isSharedStore()) &&
+					(!folderStore.isPublicStore || !folderStore.isPublicStore()))) {
+					continue;
+				}
+			}
+
 			// Check if the node already exists or not.
 			var treeNode = rootNode.findChildByEntryId(folder.get('entryid'));
 			if (!treeNode) {

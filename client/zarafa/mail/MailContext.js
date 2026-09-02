@@ -54,7 +54,13 @@ Zarafa.mail.MailContext = Ext.extend(Zarafa.core.Context, {
 		// The "New email" button which is available in all contexts
 		this.registerInsertionPoint('main.maintoolbar.new.item', this.createNewMailButton, this);
 		this.registerInsertionPoint('context.mainpaneltoolbar.item', this.createFilterButton, this);
-		this.registerInsertionPoint('main.toolbar.actions', this.createDownloadUnreadPdfAttachmentsButton, this);
+		// The unread-PDF action expects a personal context to be active. Hidden
+		// mailbox operators only expose shared mail, so there is no personal
+		// context for this action to bind to.
+		var isHiddenMailboxOperator = container.getUser && container.getUser().isSharedOnly && container.getUser().isSharedOnly();
+		if (!isHiddenMailboxOperator) {
+			this.registerInsertionPoint('main.toolbar.actions', this.createDownloadUnreadPdfAttachmentsButton, this);
+		}
 
 		// The tab in the top tabbar
 		this.registerInsertionPoint('main.maintabbar.left', this.createMainTab, this);

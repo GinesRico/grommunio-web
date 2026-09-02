@@ -456,6 +456,11 @@ Zarafa.hierarchy.data.HierarchyTreeLoader = Ext.extend(Ext.tree.TreeLoader, {
 			var stores = this.store.getRange();
 			for (var i = 0, len = stores.length; i < len; i++) {
 				var store = stores[i];
+				if (container.getUser && container.getUser().isSharedOnly && container.getUser().isSharedOnly() &&
+					(!store.isSharedStore || !store.isSharedStore()) &&
+					(!store.isPublicStore || !store.isPublicStore())) {
+					continue;
+				}
 				var folder = store.getSubtreeFolder();
 
 				if (folder && this.tree.IPMSubTreeNodeFilter(folder)) {
@@ -475,7 +480,8 @@ Zarafa.hierarchy.data.HierarchyTreeLoader = Ext.extend(Ext.tree.TreeLoader, {
 				}
 
 				var favoritesFolder = store.getFavoritesRootFolder();
-				if (store.isDefaultStore() && Ext.isDefined(favoritesFolder) && this.tree.nodeFilter(favoritesFolder)) {
+				if ((!container.getUser || !container.getUser().isSharedOnly || !container.getUser().isSharedOnly()) &&
+					store.isDefaultStore() && Ext.isDefined(favoritesFolder) && this.tree.nodeFilter(favoritesFolder)) {
 					data.push(Ext.apply({ nodeType: 'rootfolder', folder: favoritesFolder }, this.nodeConfig));
 				}
 			}

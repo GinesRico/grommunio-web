@@ -205,16 +205,22 @@ Zarafa.hierarchy.Actions = {
 			return;
 		}
 		if (titleCounterSetting === true) {
-      var title = container.getServerConfig().getWebappTitle();
-      // Shared-only accounts have no personal Inbox in the hierarchy.
-      var defaultInbox = hierarchyStore.getDefaultFolder('inbox');
-      var unreadCounter = defaultInbox ? defaultInbox.get('content_unread') : 0;
-      if (unreadCounter > 0) {
-        title = '(' + unreadCounter + ') ' + title;
-      }
+			try {
+				var title = container.getServerConfig().getWebappTitle();
+				// The Inbox record can be present before its data API is ready.
+				var defaultInbox = hierarchyStore.getDefaultFolder('inbox');
+				var unreadCounter = defaultInbox && typeof defaultInbox.get === 'function' ?
+					defaultInbox.get('content_unread') : 0;
+				if (unreadCounter > 0) {
+					title = '(' + unreadCounter + ') ' + title;
+				}
 
-      Ext.getDoc().dom.title = title;
-    }
+				Ext.getDoc().dom.title = title;
+			} catch (error) {
+				// Title updates must never prevent the web client from starting.
+				return;
+			}
+		}
 	},
 
 	/**

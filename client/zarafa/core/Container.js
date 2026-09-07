@@ -251,15 +251,14 @@ Zarafa.core.Container = Ext.extend(Ext.util.Observable, {
 			return defaultContext;
 		}
 
-		// getContextByName() intentionally applies the operator visibility filter.
-		// During initialisation that filter can hide the fallback itself, so search
-		// the registered contexts directly for the mail context.
-		if (this.userRecord && this.userRecord.isSharedOnly && this.userRecord.isSharedOnly()) {
-			var contexts = this.contexts || [];
-			for (var index = 0, len = contexts.length; index < len; index++) {
-				if (contexts[index].getName() === 'mail') {
-					return contexts[index];
-				}
+		// getContextByName() applies the operator visibility filter. During
+		// initialisation that filter may hide the default context, so use the
+		// registered mail context as a stable fallback. This also prevents the
+		// main ContextContainer from calling getModel() on undefined.
+		var contexts = this.contexts || [];
+		for (var index = 0, len = contexts.length; index < len; index++) {
+			if (contexts[index].getName() === 'mail') {
+				return contexts[index];
 			}
 		}
 	},

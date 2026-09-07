@@ -184,6 +184,13 @@ Zarafa.hierarchy.Actions = {
 	 */
 	setTitleCounter: function(hierarchyStore)
 	{
+		// Operators have no personal Inbox counter. Avoid touching the settings
+		// model while the operator mail context is still being initialized.
+		var currentUser = container.getUser && container.getUser();
+		if (currentUser && currentUser.isSharedOnly && currentUser.isSharedOnly()) {
+			return;
+		}
+
 		// First of all check if title counter plugin's setting available else check main settings.
 		var settingsModel = container.getSettingsModel && container.getSettingsModel();
 		if (!settingsModel || !settingsModel.getOneOf) {

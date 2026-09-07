@@ -197,7 +197,13 @@ Zarafa.hierarchy.Actions = {
 			// The hierarchy can finish loading before settings during startup.
 			return;
 		}
-		var titleCounterSetting = settingsModel.getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
+		var titleCounterSetting;
+		try {
+			titleCounterSetting = settingsModel.getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
+		} catch (error) {
+			// Settings may expose getOneOf before its backing data is loaded.
+			return;
+		}
 		if (titleCounterSetting === true) {
       var title = container.getServerConfig().getWebappTitle();
       // Shared-only accounts have no personal Inbox in the hierarchy.

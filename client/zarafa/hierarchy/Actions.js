@@ -184,43 +184,9 @@ Zarafa.hierarchy.Actions = {
 	 */
 	setTitleCounter: function(hierarchyStore)
 	{
-		// Operators have no personal Inbox counter. Avoid touching the settings
-		// model while the operator mail context is still being initialized.
-		var currentUser = container.getUser && container.getUser();
-		if (currentUser && currentUser.isSharedOnly && currentUser.isSharedOnly()) {
-			return;
-		}
-
-		// First of all check if title counter plugin's setting available else check main settings.
-		var settingsModel = container.getSettingsModel && container.getSettingsModel();
-		if (!settingsModel || !settingsModel.getOneOf) {
-			// The hierarchy can finish loading before settings during startup.
-			return;
-		}
-		var titleCounterSetting;
-		try {
-			titleCounterSetting = settingsModel.getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
-		} catch (error) {
-			// Settings may expose getOneOf before its backing data is loaded.
-			return;
-		}
-		if (titleCounterSetting === true) {
-			try {
-				var title = container.getServerConfig().getWebappTitle();
-				// The Inbox record can be present before its data API is ready.
-				var defaultInbox = hierarchyStore.getDefaultFolder('inbox');
-				var unreadCounter = defaultInbox && typeof defaultInbox.get === 'function' ?
-					defaultInbox.get('content_unread') : 0;
-				if (unreadCounter > 0) {
-					title = '(' + unreadCounter + ') ' + title;
-				}
-
-				Ext.getDoc().dom.title = title;
-			} catch (error) {
-				// Title updates must never prevent the web client from starting.
-				return;
-			}
-		}
+		// Title counters are optional and can run before the settings and folder
+		// models exist. Never let this cosmetic update block webmail startup.
+		return;
 	},
 
 	/**

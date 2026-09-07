@@ -704,27 +704,6 @@ class MAPISession {
 	 * @return mapistore User's default message store object
 	 */
 	public function getDefaultMessageStore($reopen = false) {
-		$sharedOnlyStores = $this->getSharedOnlyStoreNames();
-		if (!empty($sharedOnlyStores) && !$this->hasPersonalStore()) {
-			// A mailboxless session has no personal default store. Open the
-			// first authorized shared store only as an internal compatibility
-			// store; never record it as the user's default store.
-			foreach ($sharedOnlyStores as $username) {
-				try {
-					$entryid = mapi_msgstore_createentryid($this->session, $username);
-					$store = $this->openMessageStore($entryid, $username);
-					if ($store !== false) {
-						return $store;
-					}
-				}
-				catch (Exception $e) {
-					error_log(sprintf("shared-only store %s failed (actor:%s): %s",
-						$username, $this->session_info["username"] ?? '', $e->getMessage()));
-				}
-			}
-
-			return false;
-		}
 		// Return cached default store if we have one
 		if (!$reopen && !empty($this->defaultstore) && isset($this->stores[$this->defaultstore])) {
 			return $this->stores[$this->defaultstore];
@@ -734,27 +713,11 @@ class MAPISession {
 			$this->loadMessageStoresFromSession();
 		}
 		catch (Exception $e) {
-			// Mailboxless users may not have a usable message-store table.
-			// Continue so a configured shared-only virtual default can be opened.
+			// A technical mailbox should always have a usable store table. Keep
+			// the failure local so callers can report that the personal store is
+			// unavailable without substituting an unrelated shared mailbox.
 			error_log(sprintf("message-store table unavailable (actor:%s): %s",
 				$this->session_info["username"] ?? '', $e->getMessage()));
-		}
-
-		if (empty($this->defaultstore)) {
-			foreach ($sharedOnlyStores as $username) {
-				try {
-					$entryid = mapi_msgstore_createentryid($this->session, $username);
-					$store = $this->openMessageStore($entryid, $username);
-					if ($store !== false) {
-						$props = mapi_getprops($store, [PR_ENTRYID]);
-						return $store;
-					}
-				}
-				catch (Exception $e) {
-					error_log(sprintf("shared-only default store %s failed (actor:%s): %s",
-						$username, $this->session_info["username"] ?? '', $e->getMessage()));
-				}
-			}
 		}
 
 		if (empty($this->defaultstore)) {

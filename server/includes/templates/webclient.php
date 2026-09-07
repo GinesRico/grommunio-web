@@ -152,12 +152,13 @@ if (!empty($_SESSION['url_action'])) {
 <?php } ?>
 
 			// The title counter is cosmetic and its legacy bundle can run before
-			// settings/folder models are ready. Disable it for operator sessions
-			// before the webclient startup callback is registered.
-			if (user && (user.operator_mode === true || user.hide_personal_store === true || user.shared_only === true) &&
-				Zarafa.hierarchy && Zarafa.hierarchy.Actions) {
+			// settings/folder models are ready. Use the server-side operator flag,
+			// rather than the client metadata, to disable it before startup.
+			<?php if ($GLOBALS['mapisession']->isOperatorUser()) { ?>
+			if (Zarafa.hierarchy && Zarafa.hierarchy.Actions) {
 				Zarafa.hierarchy.Actions.setTitleCounter = function() {};
 			}
+			<?php } ?>
 
 			Ext.onReady(Zarafa.loadWebclient, Zarafa);
 		</script>

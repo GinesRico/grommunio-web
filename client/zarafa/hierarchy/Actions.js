@@ -185,7 +185,12 @@ Zarafa.hierarchy.Actions = {
 	setTitleCounter: function(hierarchyStore)
 	{
 		// First of all check if title counter plugin's setting available else check main settings.
-		var titleCounterSetting = container.getSettingsModel().getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
+		var settingsModel = container.getSettingsModel && container.getSettingsModel();
+		if (!settingsModel || !settingsModel.getOneOf) {
+			// The hierarchy can finish loading before settings during startup.
+			return;
+		}
+		var titleCounterSetting = settingsModel.getOneOf('zarafa/v1/plugins/titlecounter/enable', 'zarafa/v1/main/title_counter/show');
 		if (titleCounterSetting === true) {
       var title = container.getServerConfig().getWebappTitle();
       // Shared-only accounts have no personal Inbox in the hierarchy.

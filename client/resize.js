@@ -28,7 +28,15 @@ const resizeLoginBox = (function() {
 	img.onload = function() {
 		cntEl.style.visibility = 'visible';
 	};
-	img.src = window.getComputedStyle(maskEl, false).backgroundImage.slice(4, -1).replace(/"/g, "");
+	// The computed background can contain an SVG plus gradient layers. Only
+	// the first url() is an image that can be loaded by an <img> element.
+	var backgroundImage = window.getComputedStyle(maskEl, false).backgroundImage;
+	var backgroundUrl = backgroundImage.match(/url\((['"]?)(.*?)\1\)/);
+	if (backgroundUrl && backgroundUrl[2]) {
+		img.src = backgroundUrl[2];
+	} else {
+		cntEl.style.visibility = 'visible';
+	}
 
 	// call it once to initialize the elements
 	onResize();
